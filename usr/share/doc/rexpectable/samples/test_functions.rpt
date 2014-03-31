@@ -1,0 +1,51 @@
+define $HOST localhost
+define $PORT 4567
+define $BASEURL http://#{$HOST}:#{$PORT}
+define $XML #{$BASEURL}/xml
+define $JSON #{$BASEURL}/json
+
+#def function: my_Regexp1 regexp(1,^http:\/\/[^\/]\/(.*)$)
+def function: my_Regexp1 regexp(1,^http://[^/]+/(.*)$)
+def function: _my_Split1 split(-1,/)
+
+def rest: regexp
+    description = test de regexp
+    expected_description = regexp
+    url.json = http://#{$HOST}:#{$PORT}/json/url
+    url.xml = http://#{$HOST}:#{$PORT}/xml/url
+    return_code = 200
+    expected = value
+    expected_type = string
+    expected_data = ID2102
+    path.json = url => path:$.value
+    path.json = _result => function.my_Regexp1:#{url}
+    path.xml = url => path://value/@src
+    path.xml = _result => function.my_Regexp1:#{url}
+end
+
+def rest: split
+    description = test de split
+    expected_description = split
+    url.json = http://#{$HOST}:#{$PORT}/json/url
+    url.xml = http://#{$HOST}:#{$PORT}/xml/url
+    return_code = 200
+    expected = value
+    expected_type = string
+    expected_data = ID2102
+    path.json = url => path:$.value
+    path.json = _result => function._my_Split1:#{url}
+    path.xml = url => path://value/@src
+    path.xml = _result => function._my_Split1:#{url}
+end
+
+def branch: testfunc
+    regexp.get()
+    split.get()
+
+end
+
+def branch: main
+    testfunc.run()
+    switchToXML()
+    testfunc.run()
+end

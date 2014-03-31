@@ -1,0 +1,417 @@
+.TH REXPECTABLE 1 2014-03-31
+.SH NAME
+rexpectable - your REST Webservices (JSON+XML) testing tool
+.SH SYNOPSYS
+rexpectable [-h|--help] [-e|--oefe] [-l,--linesep] ... file1 [filen]
+.SH DESCRIPTION
+rexpectable improves your REST API tests 
+.SS Options
+.TP
+-h, --help:
+   show help
+.TP
+-p, --print filename or -:
+    print human readable result on stdout (or stderr when failed)
+.TP
+-e, --eofe:
+    exit on first error (maybe do not process all files)
+.TP
+-l, --linesep
+    format with line separator
+.TP
+-b, --branch branch_name:
+    run specific branch instead of default 'main' branch
+.TP
+-g, --macrovar global_var_name,global_var_value:
+.TP
+-r, --param objectname,param_name,param_value:
+    set a parameter to objectname and override the value if this 
+.TP
+-i, --include file1,file2,..filen:
+    force files to be included
+.TP
+-n, --name 'test name':
+    give a name for the test
+.TP
+-j, --junit filename or -:
+    export result using jUnit XML format use '-' for stdout
+.TP
+-c, --regcheck key_to_check:
+    verify the regression key
+.TP
+-t, --getregkey filename or -:
+    return the regression key to be check later using --regcheck option
+.TP
+-o, --json file or -:
+    export result in json format
+.TP
+-m, --html file or -:
+    export result in html format with awesome features like "sort column" or "expandable cell"
+.TP
+-L, --loop X{i,h,m,s},Y{h,m,s}:
+    do X loop of all tests and wait for Y seconds between each test
+    result for each output use root name + current iteration + extension
+        extensions are :
+         - junit: .xml
+         - json:  .json
+         - text:  .log
+         - html:  .html
+
+    example : --junit TEST12 --loop 3i,6s
+    will create :
+        TEST12_OK_0000000.xml
+        TEST12_FAILED_0000001.xml
+        TEST12_OK_0000002.xml
+
+    With 'Y' value you can have a time unit  like h, m and s means (hour, minute, second)
+    With 'X' value you can have a time unit  like h, m and s means (hour, minute, second) or i for the number of iteration
+.TP
+-K, --verboseloop:
+    print each starting iteration on stdout
+.TP
+-S, --synth filename:
+    build a synthesis file in CVS format.
+    fields are:
+        - filename
+        - start time
+        - end time
+        - diff time
+        - execution result
+.TP
+-v, --verbose:
+    enable verbose mode
+.TP
+-V, --version
+    print rexpectable version and exit
+.SH EXAMPLES
+.SS Create a file
+.TP
+Create a test file like this :
+
+    define $LOCALHOST http://localhost:4567
+    define $XML #{$LOCALHOST}/xml
+    define $JSON #{$LOCALHOST}/json
+    def function: myFunc_1 regexp(2,^http://[^/]+/(json|xml)/(.*))
+    def function: myFunc_2 split(-1,/)
+
+    def rest: login
+        description = test de login OK
+        expected_description = return code must be 200 and session with cookies have to be saved
+        url.json = #{$JSON}/login
+        url.xml = #{$XML}/login
+        return_code = 200
+        expected = value
+        expected_type = boolean
+        expected_data = true
+        path.json = value => $.success
+        path.json = _result => function.myFunc_1:#{value}
+        path.xml = _result => path://auth/@success
+        body.json = { "value":1000 }
+        body.xml = <xml><value>1000</value></xml>
+        params = username => Bond
+        params = password => 007
+    end
+
+    def branch: main
+        login.get()
+    end
+.SS global instructions
+.TP
+How to set a value
+    You have 3 ways to set a value
+        - one line inside the file
+            params = value
+        - several lines inside the file
+            params =<<label://MYLABEL
+            This his a block text
+            MYLABEL
+
+            /!\\The end of block line have to start with MYLABEL with no space before AND after/!\\
+        - data imported from an external file
+            params =<<file://path_to_file
+
+            path is relative to the current rpt file or you have to specify absolute path.
+.TP
+include
+    include another file:
+    include "file_to_include"
+    if the path is not started by a '/', the path is relative to file that makes include
+    You can create up to 100 levels of include, it should be enough.
+.TP
+define
+    define a macro variable that will be interpreted on each other line of file
+    define $HOST http://www.example.com:8080/
+
+    to use it after:
+    url.json = #{$HOST}/json
+
+.SS function: definition
+.TP
+def function: myFunc_1 regexp(2,^http://[^/]+/(json|xml)/(.*))
+    - myFunc_1: name of function => used with function.myFunc_1 (see next section)
+    - regexp: type of function
+        - regexp: regular expression
+        - split: split value
+    - 2: index of matched/splited value
+    - ^http://[^/]+/(json|xml)/(.*): regular expression for regexp option, or characters used to split.
+
+
+.SS rest: definition and option
+.TP
+define rest: 
+    First you have to define the name of your rest test by using define, ex:
+    define rest: my_test_2_DO.
+    The define section must be ended by a 'end' like this:
+    define rest: login
+        blah blah
+        blah blah
+    end 
+.TP
+description
+    description of the test
+.TP 
+expected_description
+    description of what do you expect
+.TP
+url.json
+    url of json request
+.TP
+url.xml
+    url of xml request
+.TP
+return_code: (default = 200)
+    expected HTTP return code. Several value are possible (comma separated)
+.TP
+expected: (required)
+    what expected, values can be:
+      - code_only => only http return code
+      - type => a special type of value (e.g. integer)
+      - value => a special value (e.g. 12)
+      - range => a range of value (e.g. [12;15])
+      - regexp => a regular expression
+.TP
+expected_type: (required if expected is type, value or range)
+    when you expect a type or a value you have to specify here which type, values can be:
+      - boolean
+      - int
+      - float
+      - string
+.TP
+expected_data: (required if expected is value or regexp)
+    what data do you expect
+    If you have specify value or range :
+      - boolean : true or false
+      - int : an integer e.g. 12200, or [12;17]
+      - float : a float e.g. 1223.3, or [13.0;19.0[
+    for range you have to know:
+      - [12;15] means 12 and 15 are both included
+      - ]12;15] means 12 is excluded and 15 is included
+      - [12;15[ means 12 is included and 15 is excluded
+      - ]12;15[ means 12 and 15 are both excluded
+.TP
+path.json: (required if path.xml is not set)
+    JSON path request to get value from server response
+    A variable name must be specified before the JSON path request, and we must found at least a variable named '_result'.
+    examples: 
+        - path.json firstname => path:$.firstname
+        - path.json = lastname => path:$.lastname
+        - path.json = _result => var:#{firstname}#{lastname}
+
+    You have three kinds of requests: 
+        - If it's prefixed by 'path:', the program will process a JSON path request. 
+        - If it's prefixed by 'var:', each variable will be extrapolated (the syntax is #{name_of_variable}).
+        - If it's prefixed by 'function.function_name:' defined function is called after variabled are extrapolated
+.TP
+path.xml: (required if path.json is not set)
+    The same thing as 'path.json' but for XPath.
+    examples:
+        - path.xml = firstname => path://concat/firstname/text()
+        - path.xml = lastname => path://concat/lastname/text()
+        - path.xml = _result => var:#{firstname}#{lastname}
+.TP
+body.json: (optional)
+    This permits you to send a "raw" body in json format.
+    example:
+        body.json = { "value":1000 }   
+.TP
+body.xml: (optional)
+    This permits you to send a "raw" body in xml format.
+    example:
+        body.xml = <xml><value>1000</value></xml>
+is_expected: (optional default is true)
+    is_expected = false
+    Instead of expected, you can not expected the result. Set it to 'false'.
+    For example if you give a range, the returned value must be outside the range, if you give an integer value 12, the returned value must not be 12, and so on.
+.TP
+clone(rest_object): (optional)
+    this function permits you to clone an existing (and already defined) rest test object.
+    It avoids you to copy and paste all values
+.TP
+clear: (optional)
+    clear specified parameters when you clone a 'rest' object, example
+    clear(path.json) will clear all parameters path.json
+.SS branch: definition and option
+.TP
+define branch: (one branch main is required if you don't specify any branch to run)
+    define a branch that will be executed.
+    define branch: name_of_ze_branch_2_run
+        blah blah
+        blah blah
+    end
+
+    for each defined rest object you can call several methods like 'get', 'post', and so on.
+.TP
+stopon(param):
+    param can be :
+        - firsterrorforall
+        - firsterror
+        - nostop
+    define when program will stop on error, by default it's set to 'nostop'. If set to 'fisrterror', when a test fails, current branch execution stop immediately. If set to  'firsterrorforall' whatever the branch, the program stop immediately on first failure.
+.TP
+switchToXML():
+    switch all rest test to XML (by default a rest test is set to JSON).
+    Invoke it without any object: switchToXML()
+.TP
+switchToJSON():
+    switch all rest test to JSON
+    Invoke it without any object: switchToJSON()
+.TP
+sleep(param):
+    sleep param seconds (can be a float value)
+    Invoke it without any object: sleep(2.5)
+.TP
+checkAllResult()
+    verify if xml request result gives the same thing than json request.
+    You can invoke it without any object or for a special object:
+        - checkAllResult()
+        - my_rest_test.checkAllResult()
+.TP
+get():
+    object_name.get(), invoke a 'get' request.
+    You have to specify the object name
+.TP
+post():
+    object_name.post(), invoke a 'post' request.
+    You have to specify the object name
+.TP
+getVar(global_var,result_var):
+    set global_var with result_var (see path.{xml,json} variable name in 'def rest:')
+    my_rest_test.getVar(global_var,_result)
+    global_var can be used afterward in path.{xml,json} using the syntax #{@global_var}, don't forget '@' before the name of the global var.
+.TP
+setVarToParam(global_var,param):
+    set global_var to parameter param for request (see params variable name in 'def rest:'' section)
+    my_rest_test.setVarToParam(global_var,param)
+    The goal of 'getVar' and 'setVarToParam', is to get a result from a request and inject it in another one.
+    example:
+        my_rest_test.getVar(global_var,_result)
+        nex_rest_test.setVarToParam(global_var,param)
+.TP
+setVarToExpectedData(global_var):
+    set global_var to expected_data of an object
+    my_rest_test.setVarToExpectedData(global_var)
+.TP
+clearCookies():
+    Cookies are global to all request. The first request get cookies, the next one give last cookies and save the next, and so on.
+    To clear all cookies invoke this function like this:
+        clearCookies()
+.TP
+setBody(rest_object,path_var):
+    According to tbody.{xml,json}, you can specify a body form the result of another request
+    example:
+        my_rest_test.setBody(previous_rest_obj,_result)
+.TP
+saveSessionParameter(param_id,path_var)
+    Sometimes session parameters are not stored in cookies but must be passed with others parameters. You can save a session parameter, it will be passed each time you invoke a get or post
+    param_id is the name of parameter used for the next request
+    path_var is the variable name according the specification of pat.{xml,json}
+    It only stores according your rest 'context' (means if your are in XML mode or JSON mode), if you want to store for each one, use switchTo{XML,JSON} functions.
+    You can save several session parameters if needed.
+    example:
+            my_rest_test.saveSessionParameter(id,_result)
+.TP
+clearSessionParameters():
+    clear all session parameters (depending on your rest context JSON or XML)
+
+.SS Use ruby script
+.TP
+Minimal struct of a script:
+    class TestMe < Scripts
+
+        def initialize(rpt)
+            @rpt = rpt
+        end
+
+
+        def run()
+
+        end
+
+    end
+
+    Only one class inherits of 'Scripts' class. The main program will instance an object of class TestMe using a 'Rexpectable' object. The 'run' method will be invoked.
+    Never create several classes that inherit of 'Scripts'.
+    Roughly, you can require whatever you want, create any object you want, and so on.
+.TP
+Available Methods
+    All described method above, can be used. When you invoke a method, you have to use quote or double quote for each parameter, and specify the name of rest test object in first parameter. Example:
+
+    in a Rexpectable script you invoke:
+        - login.get()
+    in a Ruby script you have to invoke:
+        @rpt.get('login')
+.TP
+Additional methods: getThisVar
+    getThisVar('login','_result')
+
+    get value of result variable
+.TP
+Additional methods: setParam
+
+    setParam('login','userID','myuserid')
+                      pararm   value
+
+    set parameter directly
+.SS run rexpectabe
+.TP
+print a report to stdout
+    rexpectable --print - myfile.rpt
+.TP
+print a report to a file
+    rexpectable --print outfile.txt myfile.rpt
+.TP
+run a ruby script
+    rexpectable --script script.rb myfile.rpt
+.TP
+define macro var
+    rexpectable --globalver '$HOST','www.example.com' --macrovar '$PROTO','https' myfile.rpt
+.SH FILES
+.SH SEE ALSO
+.SH LICENSE
+This software is distributed under MIT License:
+
+    The MIT License (MIT)
+
+    Copyright (c) <2014> <Sebastien Delcroix (Seb)>
+    Copyright (c) <2014> <Overkiz SAS>
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+.SH BUGS
+Please contact me for bugs report
+

@@ -1,0 +1,48 @@
+
+
+
+def rest: getStr
+    description = Get A value and recheck to get two times the same one
+    expected_description = return code 200 and value string after
+    url.json = http://localhost:4567/json/pubstr
+    url.xml = http://localhost:4567/xml/pubstr
+    return_code = 200
+    expected = value
+    expected_type = string
+    expected_data = striiiiing
+    path.json = _result => path:$.value
+    path.xml = _result => path://@val
+
+end
+
+
+def rest: checkStr
+	description = Get A value and recheck to get two times the same one
+    expected_description = return code 200 and value string after
+    url.json = http://localhost:4567/json/pubstr
+    url.xml = http://localhost:4567/xml/pubstr
+    return_code = 200
+    expected = value
+    expected_type = string
+    expected_data = 
+    path.json = _result => path:$.value
+    path.xml = _result => path://@val
+end
+
+
+def branch: check
+
+	getStr.get()
+	getStr.getVar(Next_ED,_result)
+	checkStr.setVarToExpectedData(Next_ED)
+	checkStr.get()
+
+end
+
+
+def branch: main
+
+	check.run()
+	switchToXML()
+	check.run()
+end

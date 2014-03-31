@@ -1,0 +1,36 @@
+def rest: counter
+
+    description = get a value after authentication
+    expected_description = return code 200 and value
+    url.json = http://localhost:4567/json/counter
+    return_code = 200
+    expected = value
+    expected_type = boolean
+    expected_data = true
+    path.json = _result => path:$.counter
+    loop.retry = 10
+    loop.between_retry = 1.5
+end
+
+def rest: counter_failed
+
+    description = get a value after authentication
+    expected_description = return code 200 and value
+    url.json = http://localhost:4567/json/counter_failed
+    return_code = 200
+    expected = value
+    expected_type = boolean
+    expected_data = true
+    path.json = _result => path:$.counter
+    loop.retry = 10
+    loop.between_retry = 1.5
+end
+
+#only to check not in unit test
+def branch:test_failed
+    counter_failed.get()
+end
+
+def branch: main
+    counter.get()
+end

@@ -1,0 +1,66 @@
+define $VALUE1000 1000
+
+def rest: check_ur_body
+    description = post a body and check returned valed
+    expected_description = return code 200 and value 1000
+    url.json = http://localhost:4567/body/json/check_ur_body
+    url.xml = http://localhost:4567/body/xml/check_ur_body
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 1000
+    body.json = { "value":1000 }
+    body.xml =<<label://END
+<xml><value>#{$VALUE1000}</value></xml>
+END
+    path.json = var1 => path:$.value
+    path.json = var2 => var:{"value":#{var1}}
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/text()
+    
+    path.xml = var2 => path:/
+
+
+end
+
+def rest: check_body
+    description = post a body and check returned valed
+    expected_description = return code 200 and value 1000
+    url.json = http://localhost:4567/body/json/check_body
+    url.xml = http://localhost:4567/body/xml/check_body
+    expected = type
+    expected_type = string
+    body.json = { "value":1000 }
+    body.xml =<<file://value.xml
+    #body.xml = <xml><value>1000</value></xml>
+    path.json = _result => path:$.value
+    path.xml = _result => path:/
+
+end
+
+def rest: re_check_ur_body
+    description = post a body and check returned valed
+    expected_description = return code 200 and value 1000
+    url.json = http://localhost:4567/body/json/re_check_ur_body
+    url.xml = http://localhost:4567/body/xml/re_check_ur_body
+    return_code = 200, 204,203
+    expected = value
+    expected_type = int
+    expected_data = 1000
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/text()
+end
+
+
+def branch: check
+    check_ur_body.post()
+    check_body.post()
+    re_check_ur_body.setBody(check_ur_body,var2)
+    re_check_ur_body.post()
+end
+
+def branch: main
+  check.run()
+  switchToXML()
+  check.run()
+end

@@ -1,0 +1,2 @@
+#!/usr/bin/env ruby1.9.3
+require 'json' ; puts JSON.pretty_generate(JSON.parse(File.read(ARGV[0])))

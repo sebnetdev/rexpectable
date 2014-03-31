@@ -1,0 +1,471 @@
+#!/usr/bin/ruby1.9.3
+
+# This software is distributed under MIT License
+# 
+# The MIT License (MIT)
+# 
+# Copyright (c) <2014> <Sebastien Delcroix (Seb)>
+# Copyright (c) <2014> <Overkiz SAS>
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+$:.unshift(File.dirname(__FILE__)+"/../lib/rexpectable/ruby")
+
+VERSION="1.11"
+
+require 'rexpectable'
+require 'getoptlong'
+require 'json'
+
+
+class Scripts
+  def self.descendants
+    ObjectSpace.each_object(Class).select { |a_class| a_class < self }
+  end
+end
+
+
+def printError(msg)
+    printf($stderr,"%s",msg.to_s)
+end
+
+
+def printToFile(filename,text,mode="w")
+    if filename == '-'
+        printf(text)
+    else
+        begin
+            file = File.open(filename, mode)
+            file.write(text)
+            file.close
+        rescue => err
+            printError "Unable to create file #{filename} => #{err}"
+            return false
+        end
+    end
+
+    return true
+end
+
+
+def readFile(filename)
+    str=""
+    begin
+        file = File.open(filename, "r")
+        file.each do |a_line|
+            str<<a_line
+        end
+        file.close
+        return str
+    rescue
+        return nil
+    end 
+end
+
+opts = GetoptLong.new(
+  [ '--help',       '-h', GetoptLong::NO_ARGUMENT ],
+  [ '--print',      '-p', GetoptLong::REQUIRED_ARGUMENT ],
+  [ '--eofe',       '-e', GetoptLong::NO_ARGUMENT ],
+  [ '--verbose',    '-v', GetoptLong::NO_ARGUMENT ],
+  [ '--linesep',    '-l', GetoptLong::NO_ARGUMENT ],
+  [ '--verboseloop','-K', GetoptLong::NO_ARGUMENT ],
+  [ '--version',    '-V', GetoptLong::NO_ARGUMENT ],
+  [ '--loop',       '-L', GetoptLong::REQUIRED_ARGUMENT],
+  [ '--branch',     '-b', GetoptLong::REQUIRED_ARGUMENT],
+  [ '--macrovar',   '-g', GetoptLong::REQUIRED_ARGUMENT],
+  [ '--param',      '-r', GetoptLong::REQUIRED_ARGUMENT],
+  [ '--include',    '-i', GetoptLong::REQUIRED_ARGUMENT],
+  [ '--name',       '-n', GetoptLong::REQUIRED_ARGUMENT],
+  [ '--junit',      '-j', GetoptLong::REQUIRED_ARGUMENT],
+  [ '--script',     '-s', GetoptLong::REQUIRED_ARGUMENT],
+  [ '--regcheck',   '-c', GetoptLong::REQUIRED_ARGUMENT],
+  [ '--getregkey',  '-t', GetoptLong::REQUIRED_ARGUMENT],
+  [ '--json',       '-o', GetoptLong::REQUIRED_ARGUMENT],
+  [ '--html',       '-m', GetoptLong::REQUIRED_ARGUMENT],
+  [ '--synth',      '-S', GetoptLong::REQUIRED_ARGUMENT]
+)
+
+eofe=false
+print_me = false
+linesep=false
+branch='main'
+verbose=false
+test_name = nil
+print_file = nil
+loop_enabled = false
+loop_number = 1
+loop_wait = 0
+
+macro_var = Hash.new
+overridden_params = Hash.new
+
+included_files = Array.new
+
+junit = false
+junit_file = nil
+
+script = false
+script_file = nil
+
+regcheck = false
+regcheckkeyfile = nil
+
+getregkey = false
+getregkeyfile = nil
+
+jsonout = false
+jsonoutfile = nil
+
+htmlout = false
+htmloutfile = nil
+
+synth_enabled = false
+synth_file = nil
+
+
+verboseloop_enabled = false
+
+opts.each do |opt, arg|
+  case opt
+    when '--help'
+      puts <<-EOF
+rexpectable V#{VERSION}
+rexpectable [OPTION] ... file1 file2 ... filen
+
+-h, --help:
+   show help
+
+-p, --print filename or -:
+    print human readable result on stdout (or stderr when failed)
+
+-e, --eofe:
+    exit on first error (maybe do not process all files)
+
+-l, --linesep
+    format with line separator
+
+-b, --branch branch_name:
+    run specific branch instead of default 'main' branch
+
+-g, --macrovar macro_var_name,macro_var_value:
+    set a global variable (/!\\applied to all files)
+
+-r, --param objectname,param_name,param_value:
+    set a parameter to objectname and override the value if this 
+    parameters il already set in conf file (/!\\applied to all files)
+
+-i, --include file1,file2,..filen:
+    force files to be included
+
+-n, --name 'test name':
+    give a name for the test
+
+-j, --junit filename or -:
+    export result using jUnit XML format use '-' for stdout
+
+-s, --script:
+    use external script to run your tests
+
+-c, --regcheck key_to_check:
+    verify the regression key
+
+-t, --getregkey filename or -:
+    return the regression key to be checked later using --regcheck option
+
+-o, --json file or -:
+    export result in json format
+
+-m, --html file or -:
+    export result in html format with awesome features like "sort column" or "expandable cell"
+
+-L, --loop X{i,h,m,s},Y{h,m,s}:
+    do X loop of all tests and wait for Y seconds between each test
+    result for each output use root name + current iteration + extension
+        extensions are :
+         - junit: .xml
+         - json:  .json
+         - text:  .log
+         - html:  .html
+
+    example : --junit TEST12 --loop 3i,6s
+    will create :
+        TEST12_OK_0000000.xml
+        TEST12_FAILED_0000001.xml
+        TEST12_OK_0000002.xml
+
+    With 'Y' value you can have a time unit  like h, m and s means (hour, minute, second)
+    With 'X' value you can have a time unit  like h, m and s means (hour, minute, second) or i for the number of iteration
+
+-K, --verboseloop:
+    print each starting iteration on stdout
+
+-S, --synth filename:
+    build a synthesis file in CVS format.
+    fields are:
+        - filename
+        - start time
+        - end time
+        - diff time
+        - execution result
+
+-v, --verbose:
+    enable verbose mode
+-V, --version:
+    print rexpectable version and exit
+EOF
+    exit 0
+    when '--print'
+        print_me = true
+        print_file=arg
+    when '--eofe'
+        eofe=true
+    when '--linesep'
+        linesep=true
+    when '--branch'
+        branch = arg
+    when '--verbose'
+        verbose = true
+    when '--macrovar'
+        a_var,a_value = arg.scan(/^([^,]+),(.*)$/)[0]
+        macro_var[a_var] = a_value
+    when '--param'
+        res = arg.scan(/^([^\,]+),([^\,]+),(.*)$/)
+        an_object,a_param,a_value = res[0]
+        if overridden_params[an_object] == nil
+            overridden_params[an_object] = Hash.new
+        end
+        overridden_params[an_object][a_param]=a_value
+    when '--include'
+        included_files=arg.split(',')
+    when '--name'
+        test_name = arg
+    when '--junit'
+        junit = true
+        junit_file = arg
+    when '--script'
+        script = true
+        script_file = arg.match(/^\//) ? arg : './'+arg
+    when '--regcheck'
+        regcheck = true
+        regcheckkeyfile = arg
+    when '--getregkey'
+        getregkey = true
+        getregkeyfile = arg
+    when '--json'
+        jsonout = true
+        jsonoutfile = arg
+    when '--html'
+        htmlout = true
+        htmloutfile = arg
+    when '--loop'
+        loop_enabled = true
+        loop_number,iter_unit,loop_wait,loop_unit = arg.scan(/^([0-9]+)(i|h|m|s),([0-9]+)(h|m|s)/)[0]
+
+        [ loop_number,iter_unit,loop_wait,loop_unit ].each do |to_check|
+            if to_check == nil
+                printError "bad values for parameter --loop #{arg}, expected X{i,h,m,s},Y{h,m,s}\n"
+                exit 1
+            end
+        end
+
+        loop_unit_multiply = 1
+        case loop_unit
+        when "h"
+            loop_unit_multiply = 3600
+        when "m"
+            loop_unit_multiply = 60
+        else
+            loop_unit_multiply = 1
+        end
+
+        loop_wait = loop_wait.to_i * loop_unit_multiply
+
+        iter_unit_multiply = 1
+
+        case iter_unit
+        when "i"
+            loop_number = loop_number.to_i
+        when "h"
+            iter_unit_multiply = 3600
+        when "m"
+            iter_unit_multiply = 60
+        when "s"
+            iter_unit_multiply = 1
+        end
+
+        unless iter_unit == "i"
+            loop_number = loop_number.to_i * iter_unit_multiply / loop_wait        
+        end
+
+        if loop_number < 1
+            printError "Not enough iteration for #{arg}\n"
+            exit 1
+        end
+
+        #puts "NB iter = #{loop_number}"
+    when "--synth"
+        synth_enabled = true
+        synth_file = arg
+
+    when "--verboseloop"
+        verboseloop_enabled = true
+
+    when "--version"
+        puts "rexpectable V#{VERSION}"
+        exit 0
+    end
+
+end
+
+
+if ARGV.length < 1
+  puts "Missing arguments (try --help)"
+  exit 0
+end
+
+#dir = ARGV.shift
+
+result = true
+
+if synth_enabled
+   printToFile(synth_file,"file;start_time;end_time;execution_time;iteration;exec_result\n")             
+end
+
+last_iter = loop_number - 1
+loop_number.times do |cur_iter|
+
+    start_time = Time.now
+    if verboseloop_enabled
+        puts "Iteration %06d sent" % [ cur_iter ] 
+    end
+
+    ARGV.each do |file|
+        rpt = Rexpectable.new(file,test_name,macro_var,overridden_params,included_files)
+        rpt.enableVerbose if verbose
+        if linesep
+            rpt.setLinesep
+        end
+
+        if rpt.parse
+
+            sub_start_time = Time.now
+
+
+            exec_result = false
+
+            if script
+                require script_file
+                exec_script = Scripts.descendants[0].new(rpt)
+                exec_result = exec_script.run
+            else
+
+                exec_result = rpt.run(branch)
+            end
+
+            
+
+            if exec_result && regcheck
+                reg_keys = readFile(regcheckkeyfile)
+                if reg_keys == nil
+                    exec_result = false
+                else
+                    keys_to_check = JSON.parse(reg_keys)
+                    exec_result = rpt.checkRegression(keys_to_check)
+                    unless exec_result
+                        new_keys = rpt.getRegressionKey
+                        for idx in 0...new_keys['tests'].length
+                            unless new_keys['tests'][idx] == keys_to_check['tests'][idx]
+                                printError("reg key[#{idx}] #{new_keys['tests'][idx]} != #{keys_to_check['tests'][idx]}\n")
+                            end
+                        end
+                    end
+                end
+            end
+
+            sub_stop_time = Time.now
+
+            sub_diff_time = sub_stop_time - sub_start_time
+
+            printed_result = exec_result ? "OK" : "FAILED"
+
+            if jsonout
+                outputfile = loop_enabled ? "%s_%s_%06d.json" % [ jsonoutfile, printed_result, cur_iter ] : jsonoutfile
+                printToFile(outputfile,rpt.getJSON)
+            end
+
+            if htmlout
+                outputfile = loop_enabled ? "%s_%s_%06d.html" % [ htmloutfile, printed_result, cur_iter ] : htmloutfile
+                printToFile(outputfile,rpt.getHTML)
+            end
+
+            if junit
+                outputfile = loop_enabled ? "%s_%s_%06d.xml" % [ junit_file, printed_result, cur_iter ] : junit_file
+                printToFile(outputfile,rpt.getJUnit)
+            end
+
+            if print_me
+                outputfile = loop_enabled ? "%s_%s_%06d.log" % [ print_file, printed_result, cur_iter ] : print_file
+                iter_print = loop_enabled ? "(iteration=%06d)" % [ cur_iter] : ""
+                printToFile(outputfile,"File : #{file}#{iter_print}: Run #{printed_result}\n#{sub_start_time.strftime("%Y-%m-%dT%H:%M:%S%z")} -> #{sub_stop_time.strftime("%Y-%m-%dT%H:%M:%S%z")} = #{sub_diff_time} s\n"+rpt.getFormattedExecStack)
+            end
+
+            unless exec_result
+                iter_print = loop_enabled ? "(iteration=%06d)" % [ cur_iter] : ""
+                printError("File : #{file}#{iter_print}: Run FAILED\n")
+                printError(rpt.getError)
+                printError(rpt.getFormattedExecStack)
+                result = false
+                if eofe
+                    exit 1
+                end
+            end
+
+            if synth_enabled
+                printToFile(synth_file,[file,sub_start_time.strftime("%Y-%m-%dT%H:%M:%S%z"),sub_stop_time.strftime("%Y-%m-%dT%H:%M:%S%z"),sub_diff_time,"%06d" % [cur_iter],exec_result ? "OK" : "FAILED" ].join(";")+"\n","a")
+            end     
+        else
+            printError("#{file}: Parse FAILED\n")
+            printError(rpt.getError)
+            result = false
+            if eofe
+                exit 1
+            end
+        end
+
+        if getregkey
+            printToFile(getregkeyfile,rpt.getRegressionKey.to_json)
+        end
+
+    end
+
+    if cur_iter != last_iter
+        stop_time = Time.now
+        diff_time = stop_time - start_time
+
+        if diff_time < loop_wait
+            sleep(loop_wait-diff_time)
+        end
+    end
+end
+
+if result
+    exit 0
+else
+    exit 1
+end

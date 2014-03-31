@@ -1,0 +1,54 @@
+
+def rest: getid
+    description = get id pour passer en parametre dans une autre requete
+    expected_description = renvoi un id
+    url.json = http://localhost:4567/getid/json
+    url.xml = http://localhost:4567/getid/xml
+    return_code = 200
+    expected = value
+    expected_type = string
+    expected_data = 1337
+    path.json = _result => path:$.id
+    path.xml = _result => path://response/id/text()
+end
+
+
+def rest: getvalue
+    description = recupere la valeur pour verifier si les parametres de sessions sont bien passes
+    expected_description = renvoi un booleen
+    url.json = http://localhost:4567/loginwparam/json
+    url.xml = http://localhost:4567/loginwparam/xml
+    return_code = 200
+    expected = value
+    expected_type = boolean
+    expected_data = true
+    path.json = _result => path:$.auth
+    path.xml = _result => path://response/auth/text()
+end
+
+def rest: getvaluefailed
+    description = verifie que les parameters sont mal passes
+    expected_description = renvoi un failed 401
+    url.json = http://localhost:4567/loginwparam/json
+    url.xml = http://localhost:4567/loginwparam/xml
+    return_code = 401
+    expected = code_only
+end
+
+
+def branch: test
+
+    getvaluefailed.get()
+    getid.get()
+    getid.saveSessionParameter(id,_result)
+     getvalue.get()
+end
+
+def branch: main
+
+    test.run()
+    switchToXML()
+    clearSessionParameters()
+    test.run()
+
+end

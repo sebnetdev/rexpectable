@@ -1,0 +1,44 @@
+def rest: getID
+    description = Get A value and recheck to get two times the same one
+    expected_description = return code 200 and value string after
+    url.json = http://localhost:4567/json/myid
+    url.xml = http://localhost:4567/xml/myid
+    return_code = 200
+    expected = value
+    expected_type = string
+    expected_data = ID2000
+    path.json = _result => path:$.id
+    path.xml = _result => path://id/text()
+
+end
+
+
+def rest: getContent
+	description = Get A value and recheck to get two times the same one
+    expected_description = return code 200 and value string after
+    url.json = http://localhost:4567/json/contentmyid
+    url.xml = http://localhost:4567/xml/contentmyid
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 12
+    path.json = _result => path:$.#{@found_id}
+    path.xml = _result => path://#{@found_id}/text()
+end
+
+
+def branch: check
+
+	getID.get()
+	getID.getVar(found_id,_result)
+	getContent.get()
+
+end
+
+
+def branch: main
+
+	check.run()
+	switchToXML()
+	check.run()
+end

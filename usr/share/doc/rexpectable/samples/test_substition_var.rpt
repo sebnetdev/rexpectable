@@ -1,0 +1,101 @@
+include "host.inc"
+define $VALUE1000 1000
+
+def rest: subsMacro
+    description = post a body and check returned valed
+    expected_description = return code 200 and value 1000
+    url.json = #{$URL}/body/json/subsMacro
+    url.xml = #{$URL}/body/xml/subsMacro
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 1000
+    body.json = { "value":#{$VALUE1000} }
+    body.xml =<<label://END
+<xml><value>#{$VALUE1000}</value></xml>
+END
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/text()
+    path.json = var1 => path:$.*
+    path.xml = var1 => path:/
+
+
+end
+
+
+def rest: subsParam
+    description = post a body and check returned valed
+    expected_description = return code 200 and value 1000
+    url.json = #{$URL}/body/json/subsParam
+    url.xml = #{$URL}/body/xml/subsParam
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 1000
+    body.json = { "value":#{data} }
+    body.xml =<<label://END
+<xml><value>#{data}</value></xml>
+END
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/text()
+    path.json = var1 => path:$.*
+    path.xml = var1 => path:/
+
+end
+
+
+def rest: subsGlobalVar
+    description = post a body and check returned valed
+    expected_description = return code 200 and value 1000
+    url.json = #{$URL}/body/json/subsGlobalVar
+    url.xml = #{$URL}/body/xml/subsGlobalVar
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 1000
+    body.json = { "value":#{@gvar1} }
+    body.xml =<<label://END
+<xml><value>#{@gvar1}</value></xml>
+END
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/text()
+    path.json = var1 => path:$.*
+    path.xml = var1 => path:/
+end
+
+def rest: subsGlobalVarUsingParam
+    description = post a body and check returned valed
+    expected_description = return code 200 and value 1000
+    url.json = #{$URL}/body/json/subsGlobalVarUsingParam
+    url.xml = #{$URL}/body/xml/subsGlobalVarUsingParam
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 1000
+    params = param1 => #{@gvar1}
+    body.json = { "value": #{param1} }
+    body.xml =<<label://END
+<xml><value>#{param1}</value></xml>
+END
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/text()
+    path.json = var1 => path:$.*
+    path.xml = var1 => path:/
+end
+
+
+def branch: check
+	subsMacro.post()
+	subsMacro.getVar(gvar1,_result)
+	subsParam.setVarToParam(gvar1,data)
+	subsParam.post()
+	subsGlobalVar.post()
+	subsGlobalVarUsingParam.post()
+end
+
+
+def branch: main
+	check.run()
+	switchToXML()
+	check.run()
+end

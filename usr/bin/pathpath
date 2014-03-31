@@ -1,0 +1,253 @@
+#!/usr/bin/ruby1.9.3
+
+# This software is distributed under MIT License
+# 
+# The MIT License (MIT)
+# 
+# Copyright (c) <2014> <Sebastien Delcroix (Seb)>
+# Copyright (c) <2014> <Overkiz SAS>
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+VERSION="2.0"
+
+require 'json'
+require 'treetop'
+require 'rexml/document'
+include REXML
+
+require 'thread'
+require 'Qt4'
+
+require 'jsonpath/parser'
+require 'jsonpath/nodes'
+
+module JSONPath
+
+  Parser = ::JSONPathGrammarParser
+  class ParseError < ::SyntaxError; end
+
+  def self.lookup(obj, path)
+    parser = Parser.new
+    if (result = parser.parse(path))
+      result.walk(obj)
+    else
+      # raise ParseError, parser.failure_reason
+      raise "#{ParseError} #{parser.failure_reason}"
+    end
+  end
+
+end
+
+
+class FileUtils
+
+    def initialize(filename)
+
+        @filename = filename
+    end
+
+    def read()
+        @str=""
+        unless File.exist?(ENV['HOME']+"/.pathpath/#{@filename}")
+            return ""
+        end
+        file = File.open(ENV['HOME']+"/.pathpath/#{@filename}","r")
+        file.each do |a_line|
+            @str << a_line
+        end
+        file.close
+    end
+
+    def getReadFile()
+        return @str
+    end
+
+    def save(data)
+
+        unless File.directory?(ENV['HOME']+"/.pathpath/")
+            Dir.mkdir(ENV['HOME']+"/.pathpath/")
+        end
+
+        file = File.open(ENV['HOME']+"/.pathpath/#{@filename}","w")
+        file.write(data)
+        file.close
+        end
+
+end
+
+class STARPATH
+
+    def initialize(srcfile,reqfile)
+        @request_file = FileUtils.new(reqfile)
+        @request_file.read()
+        @source_file = FileUtils.new(srcfile)
+        @source_file.read()
+    end
+
+    def getRequestData()
+        return @request_file.getReadFile()
+    end
+
+    def getSourceData()
+        return @source_file.getReadFile()
+    end
+
+
+end
+
+class JPATH < STARPATH
+
+    def initialize()
+        super("source.json","request.json")
+    end
+
+    def getType()
+        return "JSon"
+    end
+
+
+    def execute(json,jsonpathreq)
+        result=""
+        @request_file.save(jsonpathreq)
+        @source_file.save(json)
+
+        request = String.new(jsonpathreq)
+        request.gsub!("\n","")
+        request.gsub!(/^\s+|\s+$/,"")
+        #jsonpath = JsonPath.new(request)
+        begin
+
+            json_hash = JSON.parse(json)
+            #puts json_hash.inspect
+            tmp = JSONPath.lookup(json_hash,request)
+            result = JSON.pretty_generate tmp
+            #p "Result  : #{@resultJSONText.text}"
+        rescue => err
+            result = "Error:\n------\n#{err.to_s}"
+        end
+
+        return result
+    end
+
+end
+
+class XPATH < STARPATH
+
+    def initialize()
+        super("source.xml","request.xml")
+    end
+
+    def getType()
+        return "XML"
+    end
+
+    def execute(xml,xpathreq)
+        result=""
+        @request_file.save(xpathreq)
+        
+        @source_file.save(xml)
+        begin
+            xmldoc = Document.new(xml)
+            result = XPath.match(xmldoc, xpathreq).join('')
+        rescue => e
+            result = "Error:\n------\n#{e.to_s}"
+        end
+
+        return result
+
+    end
+
+end
+
+
+class WidgetPath < Qt::Widget
+
+    slots 'execute()'
+
+    def initialize(parent = nil)
+        super()
+    end
+
+    def initData(obj_path)
+        @obj_path = obj_path
+        @path_type = @obj_path.getType()
+        initUI()
+        @source_text.text = String.new(@obj_path.getSourceData)
+        #puts @request_text.inspect
+        @request_text.text = String.new(@obj_path.getRequestData)
+
+    end
+
+
+    
+
+    private
+
+    def execute()
+        # @request_text.public_methods.each do |a_method|
+        #     puts "- #{a_method}"
+        # end
+
+        #puts @request_text.inspect
+        @result_text.setText(@obj_path.execute(@source_text.toPlainText,@request_text.toPlainText))
+    end
+
+    def initUI()
+        label = Qt::Label.new(@path_type)
+        @source_text = Qt::TextEdit.new(self)
+        @request_text = Qt::TextEdit.new(self)
+        @request_text.maximumHeight = 30
+        @result_text = Qt::TextEdit.new(self)
+        @button = Qt::PushButton.new(tr('Execute'), self)
+        connect(@button, SIGNAL("clicked()"),self,SLOT("execute()"))
+        @vbox = Qt::VBoxLayout.new(self)
+        @vbox.addWidget(label)
+        @vbox.addWidget(@source_text)
+        @vbox.addWidget(@request_text)
+        @vbox.addWidget(@result_text)
+        @vbox.addWidget(@button)
+
+    end
+
+
+end
+
+class PathPathUI < Qt::Widget
+
+    def initialize(parent=nil)
+    # Invoke base class initialize first
+        super()
+            
+        jsponpath_widget = WidgetPath.new(self)
+        jsponpath_widget.initData(JPATH.new)
+        xpath_widget = WidgetPath.new(self)
+        xpath_widget.initData(XPATH.new)
+        main_widget = Qt::HBoxLayout.new(self)
+        main_widget.addWidget(jsponpath_widget)
+        main_widget.addWidget(xpath_widget)
+        show()
+    end
+  
+end
+
+app = Qt::Application.new(ARGV)
+
+PathPathUI.new
+app.exec

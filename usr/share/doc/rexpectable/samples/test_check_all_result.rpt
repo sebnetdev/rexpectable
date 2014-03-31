@@ -1,0 +1,180 @@
+define $LOCALHOST http://localhost:4567
+define $XML #{$LOCALHOST}/xml
+define $JSON #{$LOCALHOST}/json
+
+
+def rest: login
+    description = test de login OK
+    expected_description = return code must be 200 and session with cookies have to be saved
+    url.json = #{$JSON}/login
+    url.xml = #{$XML}/login
+    return_code = 200
+    expected = value
+    expected_type = boolean
+    expected_data = true
+    path.json = _result => path:$.success
+    path.xml = _result => path://auth/@success
+    params = username => Bond
+    params = password => 007
+end
+
+def rest: concat
+    description = test de concatenation de variables
+    expected_description = concatenation de 3 variables
+    url.json = http://localhost:4567/json/concat
+    url.xml = http://localhost:4567/xml/concat
+    return_code = 200
+    expected = value
+    expected_type = string
+    expected_data = JamesBond007
+    path.json = firstname => path:$.firstname
+    path.json = lastname => path:$.lastname
+    path.json = codename => path:$.codename
+    path.json = _result => var:#{firstname}#{lastname}#{codename}
+    path.xml = firstname => path://concat/firstname/text()
+    path.xml = lastname => path://concat/lastname/text()
+    path.xml = codename => path://concat/codename/text()
+    path.xml = _result => var:#{firstname}#{lastname}#{codename}
+end
+
+
+def rest: login_failed
+    description = test de login OK
+    expected_description = return code must be 200 and session with cookies have to be saved
+    url.json = http://localhost:4567/json/login
+    url.xml = http://localhost:4567/xml/login
+    return_code = 401
+    expected = code_only
+    params = username => Bond
+    params = password => 0070
+end
+
+
+def rest: logout
+    description = test de logout OK
+    expected_description = return code must be 200
+    url.json = http://localhost:4567/logout
+    url.xml = http://localhost:4567/logout
+    return_code = 200
+    expected = code_only
+
+end
+
+def rest: get_str
+
+    description = get a value after authentication
+    expected_description = return code 200 and value
+    url.json = http://localhost:4567/json/private
+    url.xml = http://localhost:4567/xml/private
+    return_code = 200
+    expected = type
+    expected_type = string
+    path.json = _result => path:$.msg
+    path.xml = _result => path://msg/text()
+end
+
+def rest: get_int
+
+    description = get a value after authentication
+    expected_description = return code 200 and value
+    url.json = http://localhost:4567/json/int
+    url.xml = http://localhost:4567/xml/int
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 12
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/@val
+end
+
+
+def rest: get_range
+
+    description = get a value after authentication
+    expected_description = return code 200 and value
+    url.json = http://localhost:4567/json/int
+    url.xml = http://localhost:4567/xml/int
+    return_code = 200
+    expected = range
+    expected_type = int
+    expected_data = ]10;12]
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/@val
+end
+
+
+def rest: get_back
+
+    description = get a value after authentication
+    expected_description = return code 200 and value
+    url.json = http://localhost:4567/json/public
+    url.xml = http://localhost:4567/xml/public
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 12
+    path.json = _result => path:$.msg
+    path.xml = _result => path://msg/text()
+end
+
+
+def rest: get_value_failed
+
+    description = get a value after authentication
+    expected_description = return code 200 and value
+    url.json = http://localhost:4567/json/private
+    url.xml = http://localhost:4567/xml/private
+    return_code = 401
+    expected = code_only
+end
+
+
+def rest: check_ur_body
+    description = post a body and check returned valed
+    expected_description = return code 200 and value 1000
+    url.json = http://localhost:4567/body/json/check_ur_body
+    url.xml = http://localhost:4567/body/xml/check_ur_body
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 1000
+    body.json = { "value":1000 }
+    body.xml = <xml><value>1000</value></xml>
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/text()
+    path.json = var1 => path:$.
+    path.xml = var1 => path:/
+end
+
+
+def branch: full_test
+    stopon(firsterror)
+    clearCookies()
+    get_value_failed.get()
+    login_failed.get()
+    login.get()
+    get_str.get()
+    get_int.get()
+    clearCookies()
+    get_value_failed.get()
+end
+
+
+
+
+def branch: main
+    stopon(firsterror)
+    full_test.run()
+    switchToXML()
+    login.post()
+    full_test.run()
+    concat.get()
+    switchToJSON()
+    login.get()
+    get_int.get()
+    get_int.getVar(coucou,_result)
+    get_back.setVarToParam(coucou,data)
+    concat.get()
+    checkAllResult()
+end
+
