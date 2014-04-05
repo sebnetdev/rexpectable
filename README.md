@@ -18,7 +18,7 @@ Thanks
 ------
 
  - To my boss (@ Overkiz SAS), he authorized me to publish this code under MIT license
- - To Angelique Chauvel, she has tested "rexpectable" at the beginning of the project
+ - To Angelique Chauvel, she has tested "rexpectable" a lot.
  - To Yoan Roullard, he has developed the Javascript code (for HTML export)
  - To Florent Ivoula, he uses it a lot ;-).
 
