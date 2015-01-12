@@ -11,6 +11,7 @@ You can write test scenario using the "rexpectable" language.
 
 rexpectable is written in ruby (tested with 1.9.3) and needs special gem to work:
   - gem install bruce-jsonpath --source 'http://gems.github.com'
+  - gem install rest-client # it could be installed by a simple apt-get, yum or pacman
 
 if you want to use pathpath (test your JSONPath and Xpath expression) tool, you have to install qtbindings gem too.
 
@@ -31,7 +32,7 @@ To use it, simply copy files to your system or build a Linux package (deb, rpm, 
 
 Maybe change the shebang of rexpectable.
 
-It works under windows (tested) and maybe under MacOSX (not tested).
+It works under windows (tested + generated binary using OCRA) and maybe under MacOSX (not tested).
 
 If you want to test a script, you have to install sinatra (gem install sinatra) and run restsrv.rb. All scripts test_*.rpt use restsrv.rb.
 

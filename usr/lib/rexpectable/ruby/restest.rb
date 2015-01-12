@@ -23,6 +23,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+require 'varproc'
+require 'tmpdir'
 require 'digest'
 require 'rest_client'
 require 'jsonpathcompat'
@@ -31,178 +33,15 @@ require 'rexml/document'
 include REXML
 
 
-class VarReplace
-
-    def initialize(vars)
-        @vars = vars
-    end
-
-
-    def subs!(str)
-
-        if str == nil
-            str=""
-        end
-
-        if @vars == nil
-            return
-        end
-
-        @vars.each do |a_var,a_value|
-            subs="\#\{#{a_var}\}"
-            str.gsub!(subs,a_value.to_s)
-        end
-    end
-
-    def subs(str)
-
-        str_tmp = str == nil ? "" : String.new(str)
-
-        subs!(str_tmp)
-
-        return str_tmp
-    end
-
-    def to_s()
-        return @vars.to_s
-    end
-
-end
-
-
-class VarSub
-
-    ERR_CIRCULAR_REFERENCE="circular reference with two variables"
-    ERR_NO_SUCH_VAR="No such variable"
-
-    def initialize(definition)
-
-        @definition = definition
-        @process = Array.new
-    end
-
-    def parse
-        
-        order_list = Array.new
-        @definition.each_key do |var|
-            order_list.concat(processParsing(var))
-        end
-        var_found = Hash.new
-
-
-
-        order_list.each do |var|
-            if var_found.has_key?(var)
-                next
-            end
-            @process << var
-            var_found[var] = 0
-        end
-    end
-
-    def get
-        return @process
-    end
-
-    private
-
-    def uniq(array)
-
-        result = Hash.new
-
-        array.each do |value|
-            result[value] = 0
-        end
-
-        return result.each_key.to_a
-
-    end
-
-
-    def processParsing(var,level=0)
-        if level >= 500
-            raise "Too may loop in processParsing"
-        end
-        unless @definition.has_key?(var)
-            raise "#{var} does not exist"
-        end
-
-        result = Array.new
-        vars = @definition[var].scan /\#\{([^\}]+)\}/
-
-        vars.each do |var_c|
-
-            result = result.concat(processParsing(var_c[0],level+1))
-        end
-        result << var
-
-        return result
-    end
-
-end
-
-
-class RestRequest
-
-    def initialize(url,type)
-        @url = url
-        @type = type
-    end
-
-    def get(params,cookies)
-
-        begin
-            RestClient.get(@url, {  :content_type => @type, :accept => @type, :params => params , :cookies => cookies}) { |response,request,result,&block|
-                return RestResponse.new(response.code,response.to_str,response.cookies,response.headers)
-            }
-        rescue => e
-            return RestResponse.new(0,e.to_s,nil,nil)
-        end
-    end
-
-    def delete(params,cookies)
-
-        begin
-            RestClient.delete(@url, {  :content_type => @type, :accept => @type, :params => params , :cookies => cookies}) { |response,request,result,&block|
-                return RestResponse.new(response.code,response.to_str,response.cookies,response.headers)
-            }
-        rescue => e
-            return RestResponse.new(0,e.to_s,nil,nil)
-        end
-    end
-
-    def put(params,cookies)
-
-        begin
-            RestClient.put(@url, params, {  :content_type => @type, :accept => @type, :cookies => cookies}) { |response,request,result,&block|
-                return RestResponse.new(response.code,response.to_str,response.cookies,response.headers)
-            }
-        rescue => e
-            return RestResponse.new(0,e.to_s,nil,nil)
-        end
-    end
-
-    def post(params,cookies)
-        begin
-            RestClient.post(@url, params, {  :content_type => @type, :accept => @type, :cookies => cookies}) { |response,request,result,&block|
-                return RestResponse.new(response.code,response.to_str,response.cookies,response.headers)
-            }
-        rescue => e
-
-            return RestResponse.new(0,e.to_s,nil,nil)
-        end
-    end
-
-end
-
-
-
-
 class RestResponse
 
     attr_reader :code, :body, :cookies, :headers
 
-    def initialize(code,body,cookies,headers)
+    def initialize(code=nil,body=nil,cookies=nil,headers=nil)
+        set(code,body,cookies,headers)
+    end
+    
+    def set(code=nil,body=nil,cookies=nil,headers=nil)
         @code = code
         @body = body
         @cookies = cookies
@@ -211,6 +50,114 @@ class RestResponse
 
 end
 
+
+class RestRequest
+
+    def initialize(type)
+        @type = type
+    end
+
+    def get(url,params,cookies)
+
+        begin
+            RestClient.get(url, {  :content_type => @type, :accept => @type, :params => params , :cookies => cookies, :ssl_version => :TLSv1}) { |response,request,result,&block|
+                return RestResponse.new(response.code,response.to_str,response.cookies,response.headers)
+            }
+        rescue => e
+            return RestResponse.new(0,e.to_s,nil,nil)
+        end
+    end
+
+    def delete(url,params,cookies)
+
+        begin
+            RestClient.delete(url, {  :content_type => @type, :accept => @type, :params => params , :cookies => cookies, :ssl_version => :TLSv1}) { |response,request,result,&block|
+                return RestResponse.new(response.code,response.to_str,response.cookies,response.headers)
+            }
+        rescue => e
+            return RestResponse.new(0,e.to_s,nil,nil)
+        end
+    end
+
+    def put(url,params,cookies,multipart=false,multipart_param_name=nil,body_parameter_content_type=nil)
+        return verb(url,:put,params,cookies,multipart,multipart_param_name,body_parameter_content_type)
+    end
+
+    def post(url,params,cookies,multipart=false,multipart_param_name=nil,body_parameter_content_type=nil)
+        return verb(url,:post,params,cookies,multipart,multipart_param_name,body_parameter_content_type)
+    end
+
+    private
+
+    def verb(url,verb_type,params,cookies,multipart,multipart_param_name,body_parameter_content_type)
+
+        tmpdir = nil
+        fd = nil
+        dest_file = nil
+        name = ""
+        if multipart
+            if params.class == Hash
+                params[:multipart] = true
+            else
+                warn "multipart declared but not used. Please use body_parameter_name or remove multipart = true"
+            end
+            if multipart_param_name != nil
+                tmpdir = Dir.tmpdir
+                enc = nil
+                if body_parameter_content_type != nil
+                    enc = body_parameter_content_type.split('/')[1]
+                else
+                    enc = @type.to_s
+                end
+                while File.exists?("#{tmpdir}/#{name}")
+                    name = "RESTEST.Multipartbody.#{rand(1000000)}.#{enc}"
+                end
+                dest_file = "#{tmpdir}/#{name}"
+                fd = File.new(dest_file,"w+b")
+                fd.write(params[multipart_param_name])
+                params[multipart_param_name] = fd
+                fd.rewind
+            end
+        end
+    
+
+        rest_resp = RestResponse.new
+
+        begin
+            #~ request = RestClient::Request.new(
+                #~ :method => verb_type,
+                #~ :url => @url,
+                #~ #:content_type => @type,
+                #~ :contenfft_type => "application/xml",
+                #~ :accept => @type,
+                #~ :cookies => cookies,
+                #~ :payload => params )      
+            #~ response = request.execute
+#~ 
+            #~ rest_resp.set(response.code,response.to_str,response.cookies,response.headers)
+            case verb_type 
+            when :post
+                RestClient.post(url, params, {  :content_type => @type, :accept => @type,  :cookies => cookies, :ssl_version => :TLSv1}) { |response,request,result,&block|
+                    rest_resp.set(response.code,response.to_str,response.cookies,response.headers)
+                }
+            when :put
+                RestClient.put(url, params, {  :content_type => @type, :accept => @type,  :cookies => cookies, :ssl_version => :TLSv1}) { |response,request,result,&block|
+                    rest_resp.set(response.code,response.to_str,response.cookies,response.headers)
+                }
+            end
+        rescue => e
+            rest_resp.set(0,e.to_s,nil,nil)
+        end
+
+    if dest_file != nil
+        File.unlink(dest_file)
+    end
+
+    return rest_resp
+
+    end
+
+end
 
 class Restest
 
@@ -262,7 +209,9 @@ class Restest
 
     @@functions = Hash.new
 
-    def initialize(test_desc,url,expected_return_code,expected,expected_type,expected_data,path,params,session_id=:default,is_expected=true,body=nil)
+    def initialize(test_desc,url,expected_return_code,expected,expected_type,
+                    expected_data,path,params,session_id=:default,is_expected=true,
+                    body=nil,body_parameter_name=nil,multipart=false,body_parameter_content_type=nil,content_type_json=nil,content_type_xml=nil)
 
         # test_desc : description for report
         # request_type : XML or JSON or both
@@ -287,6 +236,7 @@ class Restest
         @allrawvars = Hash.new
         @allrawvars[:xml] = Hash.new
         @allrawvars[:json] = Hash.new
+        @url = url.clone
         @test_desc = test_desc
 
         if expected_return_code.class == Array
@@ -312,8 +262,11 @@ class Restest
 
         url.each_key do |request_type|
             if request_type == :xml
-
-                @rest_req[:xml] = RestRequest.new(url[:xml],:xml)
+                if content_type_xml == nil
+                    @rest_req[:xml] = RestRequest.new(:xml)
+                else
+                    @rest_req[:xml] = RestRequest.new(content_type_xml)
+                end
                 @result_return_code[:xml] = false
                 @result_exepected_data[:xml] = false
                 if path != nil
@@ -326,7 +279,11 @@ class Restest
             end
                
             if request_type == :json
-                @rest_req[:json] = RestRequest.new(url[:json],:json)
+                if content_type_json == nil
+                    @rest_req[:json] = RestRequest.new(:json)
+                else
+                    @rest_req[:json] = RestRequest.new(content_type_json)
+                end
                 @result_return_code[:json] = false
                 @result_exepected_data[:json] = false
                 if path != nil
@@ -341,6 +298,12 @@ class Restest
 
 
         @body = body == nil ? body : body.clone
+        
+        @body_parameter_name = body_parameter_name
+        
+        @multipart = multipart
+        
+        @body_parameter_content_type = body_parameter_content_type
 
     end
 
@@ -423,15 +386,11 @@ class Restest
             @body = body.clone
         else
             if rest_type == nil
-                #@body[@rest_type] = @rest_type == :json ? body.to_json : body.to_s
                 rest_type = @rest_type
             end
 
-            if rest_type == :json
-                @body[rest_type] = body.to_s
-            else
-                @body[rest_type] = body.to_s
-            end
+            @body[rest_type] = body.to_s
+
         end
 
     end
@@ -484,16 +443,22 @@ class Restest
     def mergeParameters()
 
         params = Hash.new
+        
         if @params != nil
             params = @params.clone
         end
+        
+        if @body_parameter_name != nil && @body[@rest_type] != nil
+            params[@body_parameter_name] = @body[@rest_type]
+        end
+        
         params.merge!(@@session_parameters[@session_id][@rest_type])
         replace = VarReplace.new(@@global_var[@rest_type])
         params.each do |key,value|
             params[key] = replace.subs(value.to_s)
         end
 
-        if @body[@rest_type] == nil
+        if @body[@rest_type] == nil || @body_parameter_name != nil
             return params
         else
             replace = VarReplace.new(@@global_var[@rest_type])
@@ -501,55 +466,37 @@ class Restest
             replace = VarReplace.new(params)
             returned_value = replace.subs(returned_value)
 
-
             return returned_value
+            # return a String because it returns a raw body
         end
     end
 
+    def urlVarSub()
+        replace = VarReplace.new(@@global_var[@rest_type])
+        return replace.subs(@url[@rest_type])
+    end
 
     def get()
-
-        
-        @rest_response[@rest_type] = @rest_req[@rest_type].get(mergeParameters(),@@session_cookies[@session_id][@rest_type])
+        @rest_response[@rest_type] = @rest_req[@rest_type].get(urlVarSub(),mergeParameters(),@@session_cookies[@session_id][@rest_type])
         mergeCookies
-
-
-
         return expect?
     end
 
     def delete()
-
-        
-        @rest_response[@rest_type] = @rest_req[@rest_type].delete(mergeParameters(),@@session_cookies[@session_id][@rest_type])
+        @rest_response[@rest_type] = @rest_req[@rest_type].delete(urlVarSub(),mergeParameters(),@@session_cookies[@session_id][@rest_type])
         mergeCookies
-
-
-
         return expect?
     end
 
     def put()
-
-        @rest_response[@rest_type] = @rest_req[@rest_type].put(mergeParameters(),@@session_cookies[@session_id][@rest_type])
+        @rest_response[@rest_type] = @rest_req[@rest_type].put(urlVarSub(),mergeParameters(),@@session_cookies[@session_id][@rest_type],@multipart,@body_parameter_name,@body_parameter_content_type)
         mergeCookies
-
-
-
         return expect?    
     end
 
     def post()
-
-        if @rest_type == :json
-            @rest_response[@rest_type] = @rest_req[@rest_type].post(mergeParameters(),@@session_cookies[@session_id][@rest_type])
-        else
-            @rest_response[@rest_type] = @rest_req[@rest_type].post(mergeParameters(),@@session_cookies[@session_id][@rest_type])
-        end
+        @rest_response[@rest_type] = @rest_req[@rest_type].post(urlVarSub(),mergeParameters(),@@session_cookies[@session_id][@rest_type],@multipart,@body_parameter_name,@body_parameter_content_type)
         mergeCookies
-
-
-
         return expect?    
     end
 
@@ -672,7 +619,6 @@ class Restest
             when TYPE_INT
                 if data.class != Fixnum
                     data=data.to_s.to_i
-                    #data=data.to_i
                 end
             when TYPE_FLOAT
                 if data.class != Float
@@ -700,7 +646,6 @@ class Restest
         end
 
         result = Array.new
-        #result << match_data[0][0].downcase <= can't be downcase because function are case sensitive
         result << match_data[0][0]
         result << match_data[0][1]
         return result
@@ -939,18 +884,6 @@ class Restest
                 else
                     return false
                 end
-
-            when TYPE_IPV4
-
-                # Maybe bad !!!!
-                ip = /^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$/.match(getExpectedData)
-                ip.each do |byte|
-                    if byte.to_i > 255
-                        return false
-                    end
-                end    
-                
-                return true
 
         end
 

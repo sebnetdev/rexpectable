@@ -44,8 +44,13 @@ class Rexpectable
                                 'loop.retry' => { :required => false , :default =>1}, 
                                 'loop.between_retry' => { :required => false , :default =>0},
                                 'is_expected' => { :required => false , :default =>true},
+                                'body_parameter_name' => { :required => false , :default =>nil},
+                                'multipart' => { :required => false , :default =>false},
+                                'body_parameter_content_type' => { :required => false , :default =>nil},
                                 'body.xml' => { :required => false , :default =>nil},
                                 'body.json' => { :required => false , :default =>nil},
+                                'content_type.json' => { :required => false , :default =>nil},
+                                'content_type.xml' => { :required => false , :default =>nil}
                             }
 
     REST_KEYWORDS_MULTI =  { 
@@ -282,6 +287,16 @@ class Rexpectable
         @stack.add(branch,rest_obj,"setParam",result_p,@timing[rest_obj],"Nil","N/A","N/A","N/A","N/A","N/A","N/A",true)
         return result_p
     end
+    
+    def setValueToVar(rest_obj,int_var,value,branch='@RUBY')
+        startTiming(rest_obj)
+        result_p = true
+        @internal_vars[int_var] = value
+        @exec_rest_object[rest_obj].setGlobalVar(@internal_vars)
+        stopTiming(rest_obj)
+        @stack.add(branch,rest_obj,"setValueToVar",result_p,@timing[rest_obj],"Nil","N/A","N/A","N/A","N/A","N/A","N/A",true)
+        return result_p
+    end
 
     def setVarToParam(rest_obj,int_var,param_name,branch='@RUBY')
         startTiming(rest_obj)
@@ -455,7 +470,11 @@ class Rexpectable
                                                                     @rest_list[rest_obj_name]['params'],
                                                                     @session_cookies_id,
                                                                     @rest_list[rest_obj_name]['is_expected'],
-                                                                    { :json => @rest_list[rest_obj_name]['body.json'] , :xml => @rest_list[rest_obj_name]['body.xml'] }
+                                                                    { :json => @rest_list[rest_obj_name]['body.json'] , :xml => @rest_list[rest_obj_name]['body.xml'] },
+                                                                    @rest_list[rest_obj_name]['body_parameter_name'],
+                                                                    @rest_list[rest_obj_name]['multipart'],
+                                                                    @rest_list[rest_obj_name]['body_parameter_content_type'],
+                                                                    @rest_list[rest_obj_name]['content_type.json'], @rest_list[rest_obj_name]['content_type.xml']
                                                             )
             end
         end
@@ -538,8 +557,11 @@ class Rexpectable
     end
 
     def checkURL(url)
+    
+        url_to_check = url.gsub(/#\{[^\}]+\}/,'')
+    
         begin
-            URI.parse(url)
+            URI.parse(url_to_check)
         rescue
             return false
         end
@@ -750,7 +772,7 @@ class Rexpectable
                         if param == 'return_code'
                             @rest_list[current_def][param] = value
                         else
-                            if param == "is_expected"
+                            if param == "is_expected" || param == "multipart"
                                 if (value.to_s =~ /(true|t|yes|y|1)$/i)
                                     @rest_list[current_def][param] =  true
                                 elsif (value.to_s =~ /(false|f|no|n|0)$/i)
@@ -770,8 +792,7 @@ class Rexpectable
 
                         if param == 'expected'
                             unless Restest::EXPECTED_LIST.has_key?(value)
-                                setError("Invalid value '#{value}' for expected parameter
-                                    ",file,filename)
+                                setError("Invalid value '#{value}' for expected parameter",file,filename)
                                 file.close
                                 return false
                             end

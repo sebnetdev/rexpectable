@@ -243,6 +243,31 @@ is_expected: (optional default is true)
     Instead of expected, you can not expected the result. Set it to 'false'.
     For example if you give a range, the returned value must be outside the range, if you give an integer value 12, the returned value must not be 12, and so on.
 .TP
+multipart: (optional default is false)
+    Enable multiparted body
+    example:
+        multipart = true
+.TP
+body_parameter_name: (optional)
+    use body.xml and body.json as a parameter. If multipart option is set to false body will be url encoded
+    example: 
+        body_parameter_name = myparam
+.TP
+body_parameter_content_type: (optional)
+    force the content type of if body has been set as a parameter and multipart is activated.
+    example:
+        body_parameter_content_type = text/json
+.TP
+content_type.xml: (optional)
+    You can use this option to force content type for xml requests. It can be useful when server need a strict content type or if you want to perform a SOAP request ( => it's a hack, you can find an example below).
+    example: 
+        content_type.xml = text/xml
+.TP
+content_type.json: (optional)
+    same as content_type.xml but for json.
+    example: 
+        content_type.xml = text/json
+.TP
 clone(rest_object): (optional)
     this function permits you to clone an existing (and already defined) rest test object.
     It avoids you to copy and paste all values
@@ -297,7 +322,8 @@ post():
 getVar(global_var,result_var):
     set global_var with result_var (see path.{xml,json} variable name in 'def rest:')
     my_rest_test.getVar(global_var,_result)
-    global_var can be used afterward in path.{xml,json} using the syntax #{@global_var}, don't forget '@' before the name of the global var.
+    global_var can be used afterward in path.{xml,json} or in url.{xml,json} }using the syntax #{@global_var}, don't forget '@' before the name of the global var.
+    
 .TP
 setVarToParam(global_var,param):
     set global_var to parameter param for request (see params variable name in 'def rest:'' section)
@@ -385,6 +411,69 @@ run a ruby script
 .TP
 define macro var
     rexpectable --globalver '$HOST','www.example.com' --macrovar '$PROTO','https' myfile.rpt
+.SH SOAP Example
+.TP
+rexpectable code
+    def rest: Test
+        description = post a body and check returned valed
+        expected_description = return code 200 and value 1000
+        url.xml = http://localhost:8080/
+        return_code = 200
+        expected = code_only
+        content_type.xml = text/xml
+        body.xml =<<label://END
+    <?xml version="1.0" encoding="utf-8" ?>
+    <env:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+        xmlns:env="http://schemas.xmlsoap.org/soap/envelope/">
+      <env:Body>
+        <n1:add env:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"
+            xmlns:n1="urn:ruby:calculation">
+          <a xsi:type="xsd:int">20</a>
+          <b xsi:type="xsd:int">30</b>
+        </n1:add>
+      </env:Body>
+    </env:Envelope>
+    END
+
+    end
+
+
+    def branch: main
+        switchToXML()
+        Test.post()
+    end
+.TP
+SOAP server code (in ruby)
+    require "soap/rpc/standaloneServer"
+
+    begin
+       class MyServer < SOAP::RPC::StandaloneServer
+
+          # Expose our services
+          def initialize(*args)
+            super(*args)
+             add_method(self, 'add', 'a', 'b')
+             add_method(self, 'div', 'a', 'b')
+          end
+
+          # Handler methods
+          def add(a, b)
+             return a + b
+          end
+          def div(a, b) 
+             return a / b 
+          end
+      end
+      server = MyServer.new("MyServer", 
+                'urn:ruby:calculation', 'localhost', 8080)
+      trap('INT'){
+         server.shutdown
+      }
+      server.start
+    rescue => err
+      puts err.message
+    end
 .SH FILES
 .SH SEE ALSO
 .SH LICENSE

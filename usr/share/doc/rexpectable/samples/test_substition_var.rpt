@@ -64,7 +64,7 @@ END
 end
 
 def rest: subsGlobalVarUsingParam
-    description = post a body and check returned valed
+    description = post a body and check returned value
     expected_description = return code 200 and value 1000
     url.json = #{$URL}/body/json/subsGlobalVarUsingParam
     url.xml = #{$URL}/body/xml/subsGlobalVarUsingParam
@@ -84,18 +84,118 @@ END
 end
 
 
+def rest: bodyParam
+    description = post a body as a param check returned value
+    expected_description = return code 200 and value 2000 (sum)
+    url.json = #{$URL}/bodyparam/json
+    url.xml = #{$URL}/bodyparam/xml
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 2000
+    params = value1 => 1000
+    body_parameter_name = mybody
+    body.json = { "value": 1000 }
+    body.xml =<<label://END
+<?xml version="1.0" encoding="UTF-8"?>
+<xml>
+    <value>1000</value>
+</xml>
+END
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/text()
+end
+
+def rest: bodyParamMultipart
+    description = post a body as a param using mutlipart check returned value
+    expected_description = return code 200 and value 3000 (sum)
+    url.json = #{$URL}/bodyparammultipart/json
+    url.xml = #{$URL}/bodyparammultipart/xml
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 3000
+    params = value1 => 1000
+    body_parameter_name = mybody
+    multipart = true
+    body.json = { "value": 2000 }
+    body.xml =<<label://END
+<?xml version="1.0" encoding="UTF-8"?>
+<xml>
+    <value>2000</value>
+</xml>
+END
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/text()
+end
+
+def rest: bodyParamMultipartContentType
+    description = post a body as a param using mutlipart with fixed content type check returned value
+    expected_description = return code 200 and value 3000 (sum)
+    url.json = #{$URL}/bodyparammultipartct/json
+    url.xml = #{$URL}/bodyparammultipartct/xml
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 3000
+    params = value1 => 1000
+    body_parameter_name = mybody
+    body_parameter_content_type = text/json
+    multipart = true
+    body.json = { "value_json": 2000 }
+    body.xml = { "value_xml": 2000 }
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/text()
+end
+
+
+def rest: globarVarinUrl
+    description = send value using URL et check it
+    expected_description = return code 200 and a value (1234)
+    url.json = #{$URL}/echo/json/#{@value}
+    url.xml = #{$URL}/echo/xml/#{@value}
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 1234
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/text()
+
+end
+
+
+def rest: getSimpleValue
+    description = Get a simpe value
+    expected_description = return code 200 and a value (1234)
+    url.json = #{$URL}/value/json
+    url.xml = #{$URL}/value/xml
+    return_code = 200
+    expected = value
+    expected_type = int
+    expected_data = 1234
+    path.json = _result => path:$.value
+    path.xml = _result => path://value/text()
+end
+
+
 def branch: check
-	subsMacro.post()
-	subsMacro.getVar(gvar1,_result)
-	subsParam.setVarToParam(gvar1,data)
-	subsParam.post()
-	subsGlobalVar.post()
-	subsGlobalVarUsingParam.post()
+    subsMacro.post()
+    subsMacro.getVar(gvar1,_result)
+    subsParam.setVarToParam(gvar1,data)
+    subsParam.post()
+    subsGlobalVar.post()
+    subsGlobalVarUsingParam.post()
+    bodyParam.post()
+    bodyParamMultipart.post()
+    bodyParamMultipartContentType.post()
+    getSimpleValue.get()
+    getSimpleValue.getVar(value,_result)
+    globarVarinUrl.get()
 end
 
 
 def branch: main
-	check.run()
-	switchToXML()
-	check.run()
+    check.run()
+    switchToXML()
+    check.run()
 end

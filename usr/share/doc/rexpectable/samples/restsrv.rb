@@ -1,12 +1,39 @@
 #!/usr/bin/ruby1.9.3
 
+# This software is distributed under MIT License
+# 
+# The MIT License (MIT)
+# 
+# Copyright (c) <2014> <Sebastien Delcroix (Seb)>
+# Copyright (c) <2014> <Overkiz SAS>
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
 require 'sinatra'
 require 'json'
+require 'rexml/document'
+include REXML
 
-set :bind, '0.0.0.0'
+set :bind, '127.0.0.1'
 set :username,'Bond'
 set :password,'007'
-set :token,'osh@kerp@$@l@cuill3re'
+set :token,'@LM%$LLKJ196466TGFJJDljcdcd$$!//SZ21'
 $counter=0
 
 helpers do
@@ -223,26 +250,6 @@ get '/loginwparam/:rest' do
 
 end
 
-
-get '/serv' do
-
-  {
-   "permissions" => {
-                "endUserDeviceControlPermission" => [
-                                              {"deviceURL" => "io://VIRT001/10", "commandName" => "open", "permissionType" => "endUserDeviceControlPermission"},
-                                              {"deviceURL" => "io://VIRT001/10", "commandName" => "down", "permissionType" => "endUserDeviceControlPermission"},
-                                              {"deviceURL" => "io://VIRT001/11", "commandName" => "down", "permissionType" => "endUserDeviceControlPermission"}
-                                                    ],
-                "endUserDeviceViewPermission" => [
-                                              {"deviceURL" => "io://VIRT001/10", "permissionType" => "endUserDeviceViewPermission"}
-                                                ]
-                    }
-  }.to_json
-
-
-end
-
-
 post '/body/json/:id' do
 
   mydata = request.body.read
@@ -258,6 +265,8 @@ post '/body/xml/:id' do
   mydata
 
 end
+
+
 
 get '/array/json' do
   value={ 'value' => ['value1','value2','value3']}
@@ -302,3 +311,128 @@ get '/xml/url' do
     '<xml><value src="http://www.example.com/ID2102"/></xml>'
 end
 
+post '/bodyparam/json' do
+    printf($stderr,"STARTING POST/JSON/BODYPARAM\n")
+    params.each_key do |key|
+        printf($stderr,"POST/JSON/BODYPARAM:-%s-=-%s-\n",key,params[key].inspect)
+    end
+    val1 = params['value1'].to_i
+    json = JSON.parse(params['mybody'])
+    val2 = json['value'].to_i
+    printf($stderr,"POST/JSON/BODYPARAM:-%d-%d-\n",val1,val2)
+    content_type 'text/json'
+    { "value" => val1 + val2 }.to_json
+
+end
+
+post '/bodyparam/xml' do
+    printf($stderr,"STARTING POST/JSON/BODYPARAM\n")
+    params.each_key do |key|
+        printf($stderr,"POST/JSON/BODYPARAM:-%s-=-%s-\n",key,params[key].inspect)
+    end
+    val1 = params['value1'].to_i
+    xmldoc = Document.new(params['mybody'])
+    val2 = XPath.match(xmldoc, '//value/text()')[0].to_s.to_i
+    printf($stderr,"POST/JSON/BODYPARAM:-%d-%d-\n",val1,val2)
+    content_type 'text/xml'
+    "<xml><value>#{val1+val2}</value></xml>"
+end
+
+post '/bodyparammultipart/json' do
+    printf($stderr,"STARTING POST/JSON/BODYPARAMMULTIPART\n")
+    params.each_key do |key|
+        printf($stderr,"POST/JSON/BODYPARAMMULTIPART:-%s-=-%s-\n",key,params[key].inspect)
+    end
+    val1 = params['value1'].to_i
+    json = JSON.parse(File.read(params['mybody'][:tempfile]))
+    val2 = json['value'].to_i
+    printf($stderr,"POST/JSON/BODYPARAM:-%d-%d-\n",val1,val2)
+    content_type 'text/json'
+    { "value" => val1 + val2 }.to_json
+
+end
+
+post '/bodyparammultipart/xml' do
+    printf($stderr,"STARTING POST/JSON/BODYPARAMMULTIPART\n")
+    params.each_key do |key|
+        printf($stderr,"POST/JSON/BODYPARAMMULTIPART:-%s-=-%s-\n",key,params[key].inspect)
+    end
+    val1 = params['value1'].to_i
+    xmldoc = Document.new(File.read(params['mybody'][:tempfile]))
+    val2 = XPath.match(xmldoc, '//value/text()')[0].to_s.to_i
+    printf($stderr,"POST/JSON/BODYPARAM:-%d-%d-\n",val1,val2)
+    content_type 'text/xml'
+    "<xml><value>#{val1+val2}</value></xml>"
+end
+
+
+post '/bodyparammultipartct/json' do
+    printf($stderr,"STARTING POST/JSON/BODYPARAMMULTIPARTCT\n")
+    params.each_key do |key|
+        printf($stderr,"POST/JSON/BODYPARAMMULTIPARTCT:-%s-=-%s-\n",key,params[key].inspect)
+    end
+    val1 = params['value1'].to_i
+    json = JSON.parse(File.read(params['mybody'][:tempfile]))
+    val2 = json['value_json'].to_i
+    printf($stderr,"POST/JSON/BODYPARAM:-%d-%d-\n",val1,val2)
+    content_type 'text/json'
+    { "value" => val1 + val2 }.to_json
+
+end
+
+post '/bodyparammultipartct/xml' do
+    printf($stderr,"STARTING POST/JSON/BODYPARAMMULTIPARTCT\n")
+    params.each_key do |key|
+        printf($stderr,"POST/JSON/BODYPARAMMULTIPARTCT:-%s-=-%s-\n",key,params[key].inspect)
+    end
+    val1 = params['value1'].to_i
+    json = JSON.parse(File.read(params['mybody'][:tempfile]))
+    val2 = json['value_xml'].to_i
+    printf($stderr,"POST/JSON/BODYPARAM:-%d-%d-\n",val1,val2)
+    content_type 'text/xml'
+    "<xml><value>#{val1+val2}</value></xml>"
+end
+
+post '/multi' do
+    puts request.body.read
+    params.each_key do |key|
+        printf($stderr,"POST/JSON/MULTI:-%s-=-%s-\n",key,params[key].inspect)
+    end
+    
+    content_type 'text/json'
+    { 'value' => 'http://www.example.com/ID2102'}.to_json
+end
+
+
+get '/value/json' do
+    content_type 'text/json'
+    { "value" => 1234 }.to_json
+end
+
+get '/multivalue/json' do
+    content_type 'text/json'
+    { "value" => "1234,1234,1234" }.to_json
+end
+
+get '/echo/json/:value' do
+    value = params[:value].to_i
+    content_type 'text/json'
+    { "value" => value }.to_json
+end
+
+get '/value/xml' do
+    content_type 'text/xml'
+    "<xml><value>1234</value></xml>"
+end
+
+get '/multivalue/xml' do
+    content_type 'text/xml'
+    "<xml><value>1234,1234,1234</value></xml>"
+end
+
+
+get '/echo/xml/:value' do
+    value = params[:value]
+    content_type 'text/xml'
+    "<xml><value>#{value}</value></xml>"
+end

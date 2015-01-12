@@ -1,4 +1,5 @@
 #!/usr/bin/ruby1.9.3
+#encoding: UTF-8
 
 # This software is distributed under MIT License
 # 
@@ -27,7 +28,7 @@
 
 $:.unshift(File.dirname(__FILE__)+"/../lib/rexpectable/ruby")
 
-VERSION="1.11"
+VERSION="1.12"
 
 require 'rexpectable'
 require 'getoptlong'
